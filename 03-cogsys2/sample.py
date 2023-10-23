@@ -1,49 +1,62 @@
+# import python_actr module library for Python ACT-R classes
 import python_actr
 from python_actr.actr import *
+from python_actr.actr.hdm import *
 
-log = python_actr.log(html=True)
 
-
-class Addition(ACTR):
+class PizzaBuilder_DM(ACTR):
     goal = Buffer()
-    retrieve = Buffer()
-    memory = Memory(retrieve, threshold=-3)
-    DMNoise(memory, noise=0.3)
+    retrieval = Buffer()
+    DM_module = HDM(retrieval, finst_size=22, finst_time=100.0)
+    my_pizza = []
+
+    def cook_pizza(self, pizza_ingred):
+        '''
+        Takes in list of "ingrediants" and outputs a "pizza"
+        Inputs: pizza_ingred [list of strings]
+        Output: cooked_pizza [string]
+        '''
+        # Whats going on here? - https://docs.python.org/3/library/stdtypes.html#str.join
+        return ("_".join(pizza_ingred))
 
     def init():
+        # Add memory chunks to declarative memory module
+        # (More chunks needed in DM!)
         print("Init")
-        memory.add('count 0 1')
-        memory.add('count 1 2')
-        memory.add('count 2 3')
-        memory.add('count 3 4')
-        memory.add('count 4 5')
-        memory.add('count 5 6')
-        memory.add('count 6 7')
-        memory.add('count 7 8')
+        DM_module.add("prev:crust next:marinara")
+        DM_module.add("prev:marinara next:mozzarella")
+        DM_module.add("prev:mozzarella next:pepperoni")
+        DM_module.add("prev:pepperoni next:onion")
+        DM_module.add("prev:crust next:bbq")
+        DM_module.add("prev:bbq next:cheddar")
+        DM_module.add("prev:cheddar next:bacon")
+        DM_module.add("prev:bacon next:onion")
+        goal.set(f"build_pizza ingredient:crust request:{True}")
 
-    def initializeAddition(goal='add ?num1 ?num2 count:None?count sum:None?sum'):
-        print(f"init addition {num1} {num2}")
-        goal.modify(count=0, sum=num1)
-        memory.request('count ?num1 ?next')
+    # Set goal so that we can prep ingredients
 
-    def terminateAddition(goal='add ?num1 ?num2 count:?num2 sum:?sum'):
-        goal.set('result ?sum')
-        print (f"Sum :{sum}")
+    def request_next_ingredient(goal=f"build_pizza ingredient:?ingredient request:{True}"):
+        print(f"Requesting next ingridient : {ingredient}")
+        DM_module.request(f"prev:{ingredient} next:?")
+        goal.set(f"build_pizza ingredient:?ingredient request:{False}")
 
-    def incrementSum(goal='add ?num1 ?num2 count:?count!?num2 sum:?sum',
-                     retrieve='count ?sum ?next'):
-        print(f"incrementSum {sum} {next}")
-        goal.modify(sum=next)
-        memory.request('count ?count ?n2')
+    def place_ingredient(goal=f"build_pizza ingredient:?ingredient request:{False}", retrieval="prev:?prev next:?next"):
+        print(f"placing ingredient : ingredient={ingredient}, prev={prev}, next={next}")
+        my_pizza.append(next)
+        goal.set(f"build_pizza ingredient:{next} request:{True}")
 
-    def incrementCount(goal='add ?num1 ?num2 count:?count sum:?sum',
-                       retrieve='count ?count ?next'):
-        print(f"incrementCount {count} {next}")
-        goal.modify(count=next)
-        memory.request('count ?sum ?n2')
+    def cook_pizza_step(goal="build_pizza ingredient:onion"):
+        my_pizza = self.cook_pizza(my_pizza)
+        print("Mmmmmm my " + my_pizza + " pizza is gooooood!")
+        self.stop()
 
 
-model = Addition()
-python_actr.log_everything(model)
-model.goal.set('add 5 2 count:None sum:None')
-model.run()
+class EmptyEnvironment(python_actr.Model):
+    pass
+
+
+env_name = EmptyEnvironment()
+agent_name = PizzaBuilder_DM()
+env_name.agent = agent_name
+python_actr.log_everything(env_name)
+env_name.run()
